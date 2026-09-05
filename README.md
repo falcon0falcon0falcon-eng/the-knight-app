@@ -22,8 +22,12 @@ npm run dev        # http://localhost:3000
 4. جهّز ملف البيئة — **أسرع طريقة** (تحوّل ملف الـJSON تلقائيًا إلى `.env.local` بصلاحيات 600):
 
 ```bash
-npm run cloud:init -- ~/Downloads/my-project-firebase-adminsdk-xxxxx.json
+npm run cloud:init -- ~/Downloads/my-project-firebase-adminsdk-xxxxx.json   # من ملف
+cat service-account.json | npm run cloud:init -- -                          # أو من stdin (لصق ثم Ctrl+D)
+npm run cloud:init -- file.json --print                                     # يطبع المتغير للاستضافة بلا كتابة ملف
 ```
+
+> السكربت يصلّح تلقائيًا الـJSON المنسوخ من محادثات (روابط Markdown مثل `[email](mailto:email)` تفسد الملف).
 
 أو يدويًا: `cp .env.example .env.local` ثم املأ من ملف الـJSON:
 
@@ -67,10 +71,10 @@ npx firebase-tools deploy --only firestore:rules
 |---|---|
 | `npm run dev` | خادم التطوير |
 | `npm run build` / `npm start` | بناء وتشغيل الإنتاج |
-| `npm test` | 69 اختبارًا (حسابات، مزامنة، ترحيلات، حسابات XP) |
+| `npm test` | 84 اختبارًا (حسابات، مزامنة، ترحيلات، حسابات XP) |
 | `npm run typecheck` | فحص TypeScript |
 | `npm run lint` | ESLint |
-| `npm run cloud:init -- <file.json>` | تحويل ملف حساب الخدمة إلى `.env.local` |
+| `npm run cloud:init -- <file.json>` | تحويل ملف حساب الخدمة إلى `.env.local` (يدعم `-` للـstdin و`--print`) |
 | `npm run cloud:check` | فحص اتصال Firestore (مهلة 20 ثانية) |
 
 > 🔐 **أمان المفاتيح:** ملف حساب الخدمة سرّ كامل الصلاحية على مشروعك. لا ترفعه إلى Git ولا ترسله في محادثات،

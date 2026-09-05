@@ -109,6 +109,7 @@ src/core/storage.ts                العميل: CloudRepository + SyncEngine (+
 npm test
 ```
 
-- `firestore-codec.test.ts` — الترميز، الحدود، LWW، صلاحية المعرّفات.
+- `api-routes.test.ts` — نقاط `/api/sync`, `/api/sync/link`, `/api/ai/audit`, `/api/health` نفسها (رموز الحالة، الهوية، العزل بين الحسابات).
+- `firestore-codec.test.ts` — الترميز، الحدود، LWW، صلاحية المعرّفات، المهل الزمنية.
 - `firestore-sync.test.ts` — push/pull/link/audit فوق **Firestore مزيّف في الذاكرة** (لا يحتاج Java/محاكي).
 - `firebase-config.test.ts` — كشف الاعتمادات لكل الخيارات الأربعة.

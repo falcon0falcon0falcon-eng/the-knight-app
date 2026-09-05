@@ -16,6 +16,25 @@ const bad = (m) => console.log(`\x1b[31m✗\x1b[0m ${m}`);
 const warn = (m) => console.log(`\x1b[33m!\x1b[0m ${m}`);
 const info = (m) => console.log(`  ${m}`);
 
+/**
+ * ينظّف JSON مُلصقًا من محادثة/محرر: يحوّل [text](url) إلى text ويزيل الأسطر الفارغة الزائدة.
+ * (نسخ ملف حساب الخدمة من دردشة يحوّل الإيميل والروابط تلقائيًا إلى روابط Markdown فيفسد الـJSON)
+ */
+function unmangle(text) {
+  return text
+    .replace(/```(?:json)?/g, "")
+    .replace(/\[([^\]]+)\]\((?:mailto:)?[^)]*\)/g, "$1")
+    .trim();
+}
+
+function readStdin() {
+  try {
+    return readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
+}
+
 function findCandidate() {
   const dirs = [process.cwd(), path.join(homedir(), "Downloads"), path.join(homedir(), "downloads"), "/home/user/uploads"];
   for (const dir of dirs) {
@@ -29,23 +48,48 @@ function findCandidate() {
   return null;
 }
 
-const target = process.argv[2] ?? findCandidate();
-if (!target) {
+const args = process.argv.slice(2);
+const printOnly = args.includes("--print");
+const fromStdin = args.includes("-") || args.includes("--stdin");
+const target = fromStdin ? null : (args.find((a) => !a.startsWith("-")) ?? findCandidate());
+
+if (!fromStdin && !target) {
   bad("لم أجد ملف حساب الخدمة.");
   info("الاستخدام: npm run cloud:init -- /path/to/xxx-firebase-adminsdk-yyy.json");
+  info("أو الصق محتوى الملف مباشرة:  npm run cloud:init -- -    (ثم Ctrl+D)");
   info("تحميله: Firebase Console → ⚙ Project settings → Service accounts → Generate new private key");
   process.exit(1);
 }
-if (!existsSync(target)) {
+if (!fromStdin && !existsSync(target)) {
   bad(`الملف غير موجود: ${target}`);
   process.exit(1);
 }
 
+const rawText = fromStdin ? readStdin() : readFileSync(target, "utf8");
 let sa;
 try {
-  sa = JSON.parse(readFileSync(target, "utf8"));
-} catch (e) {
-  bad(`الملف ليس JSON صالحًا: ${e.message}`);
+  sa = JSON.parse(rawText);
+} catch {
+  try {
+    sa = JSON.parse(unmangle(rawText));
+    warn("تم إصلاح تنسيق Markdown في الـJSON الملصق (روابط [..](..))");
+  } catch (e2) {
+    bad(`المحتوى ليس JSON صالحًا: ${e2.message}`);
+    info("لو نسخته من محادثة، نزّل الملف الأصلي من Firebase Console بدل النسخ.");
+    process.exit(1);
+  }
+}
+// روابط Markdown قد تكون داخل قيم النصوص حتى لو كان الـJSON صالحًا شكليًا
+let fixed = false;
+for (const k of ["client_email", "token_uri", "auth_uri", "project_id", "private_key_id", "client_id"]) {
+  if (typeof sa[k] === "string" && /\[[^\]]+\]\(/.test(sa[k])) {
+    sa[k] = unmangle(sa[k]);
+    fixed = true;
+  }
+}
+if (fixed) warn("تم تنظيف روابط Markdown داخل قيم الـJSON (نسخ من محادثة)");
+if (typeof sa.private_key === "string" && !sa.private_key.includes("BEGIN")) {
+  bad("حقل private_key لا يبدو مفتاحًا صالحًا.");
   process.exit(1);
 }
 
@@ -66,6 +110,15 @@ const oneLine = JSON.stringify({
   client_id: sa.client_id,
   token_uri: sa.token_uri ?? "https://oauth2.googleapis.com/token",
 });
+
+if (printOnly) {
+  ok(`متغير جاهز للصقه في إعدادات الاستضافة (Vercel → Settings → Environment Variables):`);
+  console.log("");
+  console.log(`FIREBASE_SERVICE_ACCOUNT=${oneLine}`);
+  console.log("");
+  info("لم يُكتب أي ملف على القرص (--print).");
+  process.exit(0);
+}
 
 const envPath = path.join(process.cwd(), ".env.local");
 const previous = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
@@ -99,7 +152,7 @@ const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") 
 if (/^\.env\.\*$/m.test(gitignore) || /^\.env\.local$/m.test(gitignore)) ok(".env.local متجاهَل في Git");
 else warn("أضف .env.local إلى .gitignore قبل أي commit!");
 
-if (path.resolve(target).startsWith(process.cwd() + path.sep)) {
+if (target && path.resolve(target).startsWith(process.cwd() + path.sep)) {
   warn(`ملف حساب الخدمة موجود داخل المستودع (${path.relative(process.cwd(), target)}) — انقله خارجه أو احذفه بعد الإعداد.`);
 }
 
