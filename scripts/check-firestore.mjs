@@ -85,18 +85,27 @@ try {
 const databaseId = process.env.FIREBASE_DATABASE_ID?.trim();
 const db = databaseId && databaseId !== "(default)" ? getFirestore(app, databaseId) : getFirestore(app);
 
+const TIMEOUT_MS = Number(process.env.CLOUD_CHECK_TIMEOUT_MS ?? 20000);
+const withTimeout = (promise) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT بعد ${TIMEOUT_MS / 1000} ثانية`)), TIMEOUT_MS).unref()),
+  ]);
+
 const ref = db.collection("_cloudCheck").doc(`probe_${Date.now()}`);
 try {
-  await ref.set({ hello: "the-knight-app", at: Date.now() });
+  await withTimeout(ref.set({ hello: "the-knight-app", at: Date.now() }));
   ok("الكتابة في Firestore نجحت");
-  const snap = await ref.get();
+  const snap = await withTimeout(ref.get());
   if (!snap.exists || snap.data().hello !== "the-knight-app") throw new Error("القراءة لم تُطابق ما كُتب");
   ok("القراءة نجحت");
-  await ref.delete();
+  await withTimeout(ref.delete());
   ok("الحذف نجح — Cloud Sync جاهز 🎉");
   process.exit(0);
 } catch (e) {
   bad(`فشل الاتصال بـFirestore: ${e?.message ?? e}`);
+  if (String(e?.message).includes("TIMEOUT")) info("غالبًا الاعتمادات غير صحيحة أو لا يوجد اتصال بالإنترنت — راجع project_id والمفتاح.");
+  if (String(e?.message).includes("invalid_grant") || String(e?.message).includes("UNAUTHENTICATED")) info("المفتاح مرفوض — قد يكون مُلغى أو من مشروع آخر؛ أنشئ مفتاحًا جديدًا.");
   if (String(e?.message).includes("NOT_FOUND")) info("تأكد من إنشاء قاعدة Firestore من Firebase Console → Build → Firestore Database → Create database");
   if (String(e?.message).includes("PERMISSION_DENIED")) info("تأكد أن حساب الخدمة يملك دور Cloud Datastore User أو Editor");
   if (String(e?.message).includes("DECODER") || String(e?.message).includes("PEM")) info("المفتاح الخاص غير صحيح — ضعه بين علامتي اقتباس مع \\n كما في .env.example");

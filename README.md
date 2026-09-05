@@ -19,13 +19,13 @@ npm run dev        # http://localhost:3000
 1. [Firebase Console](https://console.firebase.google.com) → **Add project**.
 2. **Build → Firestore Database → Create database** (اختر Production mode وأي منطقة).
 3. **⚙ Project settings → Service accounts → Generate new private key** (ينزّل ملف JSON).
-4. جهّز ملف البيئة:
+4. جهّز ملف البيئة — **أسرع طريقة** (تحوّل ملف الـJSON تلقائيًا إلى `.env.local` بصلاحيات 600):
 
 ```bash
-cp .env.example .env.local
+npm run cloud:init -- ~/Downloads/my-project-firebase-adminsdk-xxxxx.json
 ```
 
-واملأ من ملف الـJSON:
+أو يدويًا: `cp .env.example .env.local` ثم املأ من ملف الـJSON:
 
 ```env
 FIREBASE_PROJECT_ID=my-project-id
@@ -70,7 +70,11 @@ npx firebase-tools deploy --only firestore:rules
 | `npm test` | 69 اختبارًا (حسابات، مزامنة، ترحيلات، حسابات XP) |
 | `npm run typecheck` | فحص TypeScript |
 | `npm run lint` | ESLint |
-| `npm run cloud:check` | فحص اتصال Firestore |
+| `npm run cloud:init -- <file.json>` | تحويل ملف حساب الخدمة إلى `.env.local` |
+| `npm run cloud:check` | فحص اتصال Firestore (مهلة 20 ثانية) |
+
+> 🔐 **أمان المفاتيح:** ملف حساب الخدمة سرّ كامل الصلاحية على مشروعك. لا ترفعه إلى Git ولا ترسله في محادثات،
+> واحتفظ به خارج مجلد المستودع. لو تسرّب: Firebase Console → Service accounts → احذف المفتاح وأنشئ غيره.
 
 ## 5) النشر
 
