@@ -1,0 +1,60 @@
+import { describe, it, expect } from "vitest";
+import { levelFromXp, rankForLevel, xpForLevel, taskXp, streakBonusXp, xpToNext } from "@/calculations/gamification";
+import { habitStreak, habitDueState, computeDayProgress, carriedTasks, emptyEntry } from "@/calculations/daily";
+import { bmr, effectiveBurn, estimateBodyFat, bodyProgress, overallBodyProgress, expectedWeightChange } from "@/calculations/body";
+import { quranProgress, dueReviewPages, QURAN_PAGES, QURAN_UNITS } from "@/calculations/quran";
+import { goalProgress, weekRange, materializeGoals, periodReport } from "@/calculations/goals";
+import { computeRisk, recoveryIndex, addictionIndex, relapseGaps, sobrietyStats, cravingXp, recoveryPhase } from "@/calculations/recovery";
+import { challengeState, resolveChallengeStatus } from "@/calculations/challenges";
+import { parseCoursesCsv, parseDuration, detectDelimiter } from "@/calculations/courses";
+import { trainingStats, trainingSessionXp } from "@/calculations/training";
+import { weekStart, weekday, addDays } from "@/core/date";
+import { AppData, defaultAppData, Habit } from "@/types/app-data";
+
+const T = "2025-03-12"; // Wednesday
+const mk = (fn?: (d: AppData) => void) => { const d = defaultAppData(); fn?.(d); return d; };
+
+describe("gamification", () => {
+  it("level curve is monotonic and cumulative", () => { expect(xpForLevel(1)).toBe(0); expect(xpForLevel(2)).toBe(xpToNext(1)); expect(xpForLevel(5)).toBeGreaterThan(xpForLevel(4)); });
+  it("levelFromXp inverts xpForLevel", () => { for (const l of [1, 5, 10, 23, 50]) expect(levelFromXp(xpForLevel(l)).level).toBe(l); expect(levelFromXp(xpForLevel(10) - 1).level).toBe(9); });
+  it("ranks E..S", () => { expect(rankForLevel(1)).toBe("E"); expect(rankForLevel(9)).toBe("E"); expect(rankForLevel(10)).toBe("D"); expect(rankForLevel(19)).toBe("D"); expect(rankForLevel(20)).toBe("C"); expect(rankForLevel(30)).toBe("B"); expect(rankForLevel(40)).toBe("A"); expect(rankForLevel(49)).toBe("A"); expect(rankForLevel(50)).toBe("S"); expect(rankForLevel(99)).toBe("S"); });
+  it("task xp by difficulty & streak bonus", () => { expect(taskXp(1)).toBe(5); expect(taskXp(5)).toBe(40); expect(streakBonusXp(7, 7, 15)).toBe(15); expect(streakBonusXp(8, 7, 15)).toBe(0); expect(streakBonusXp(0, 7, 15)).toBe(0); });
+});
+describe("dates", () => { it("week starts Saturday", () => { expect(weekday(weekStart(T))).toBe(6); expect(weekStart("2025-03-15")).toBe("2025-03-15"); expect(weekStart("2025-03-14")).toBe("2025-03-08"); }); });
+describe("daily / streaks", () => {
+  const h: Habit = { id: "h", name: "x", area: "mental", days: [1, 3, 5], optionalDays: [0], enabled: true, custom: true, xp: 5 }; // Mon/Wed/Fri required, Sun optional
+  it("off-day and optional day do not break streak", () => {
+    const d = mk((x) => { for (const dt of ["2025-03-03", "2025-03-05", "2025-03-07", "2025-03-10", "2025-03-12"]) x.entries[dt] = { ...emptyEntry(dt), habits: { h: true } }; x.entries["2025-03-08"] = emptyEntry("2025-03-08"); x.entries["2025-03-09"] = emptyEntry("2025-03-09"); });
+    expect(habitDueState(h, "2025-03-08")).toBe("off"); expect(habitDueState(h, "2025-03-09")).toBe("optional"); expect(habitStreak(d, h, T)).toBe(5);
+  });
+  it("missed required day breaks streak", () => { const d = mk((x) => { x.entries["2025-03-10"] = { ...emptyEntry("2025-03-10"), habits: {} }; x.entries["2025-03-12"] = { ...emptyEntry(T), habits: { h: true } }; x.entries["2025-03-07"] = { ...emptyEntry("2025-03-07"), habits: { h: true } }; }); expect(habitStreak(d, h, T)).toBe(1); });
+  it("day progress counts required habits + tasks", () => { const d = mk((x) => { x.habits = [h, { ...h, id: "g", days: [3] }]; x.entries[T] = { ...emptyEntry(T), habits: { h: true }, tasks: [{ id: "t1", title: "a", area: "mental", difficulty: 2, xp: 10, metrics: [], done: true, source: "custom", createdAt: "" }, { id: "t2", title: "b", area: "mental", difficulty: 2, xp: 10, metrics: [], done: false, source: "custom", createdAt: "" }] }; }); const p = computeDayProgress(d, T, weekStart(T)); expect(p.requiredTotal).toBe(2); expect(p.requiredDone).toBe(1); expect(p.questsTotal).toBe(2); expect(p.percent).toBe(50); expect(p.missing.length).toBe(2); });
+  it("carried tasks appear next day", () => { const d = mk((x) => { x.entries["2025-03-11"] = { ...emptyEntry("2025-03-11"), tasks: [{ id: "t", title: "late", area: "career", difficulty: 3, xp: 15, metrics: [], done: false, source: "custom", createdAt: "" }] }; }); const c = carriedTasks(d, T); expect(c.length).toBe(1); expect(c[0].source).toBe("carried"); expect(c[0].carriedFrom).toBe("t"); });
+});
+describe("body", () => {
+  const prof = { heightCm: 175, sex: "male" as const, birthYear: 1995, activity: 1.4 };
+  it("BMR Mifflin", () => { expect(bmr(prof, 80)).toBeGreaterThan(1600); expect(bmr(prof, undefined)).toBe(0); });
+  it("BMR fallback only when burn missing", () => { const e = emptyEntry(T); expect(effectiveBurn(e, prof, 80).fromBmr).toBe(true); expect(effectiveBurn({ ...e, caloriesBurned: 500 }, prof, 80)).toEqual({ burn: 500, fromBmr: false }); });
+  it("body fat & progress", () => { expect(estimateBodyFat(prof, 85, 38)).toBeGreaterThan(5); expect(estimateBodyFat(prof, 30, 38)).toBeNull(); const p = bodyProgress([{ id: "a", date: "2025-01-01", weight: 90 }, { id: "b", date: "2025-03-01", weight: 85 }], { ...defaultAppData().goalSettings, weightGoal: 80 }); expect(p.find((x) => x.key === "weight")!.percent).toBe(50); expect(overallBodyProgress(p)).toBe(50); expect(expectedWeightChange(7700)).toBe(1); });
+});
+describe("quran", () => { it("progress & due reviews", () => { const q = { pages: { "1": { memorizedAt: "2025-01-01", lastReviewAt: "2025-01-01", reviews: 0 }, "2": { memorizedAt: T, lastReviewAt: T, reviews: 0 } }, reviewIntervalDays: 7 }; const p = quranProgress(q, T); expect(p.memorized).toBe(2); expect(p.dueReviews).toBe(1); expect(dueReviewPages(q, T)).toEqual([1]); expect(QURAN_PAGES).toBe(604); expect(QURAN_UNITS).toBe(240); }); });
+describe("goals engine", () => {
+  it("recurring goal from real metric", () => { const d = mk((x) => { x.entries[T] = { ...emptyEntry(T), gym: true }; x.entries["2025-03-10"] = { ...emptyEntry("2025-03-10"), gym: true }; }); const r = weekRange(T); const g = { id: "g", title: "gym", kind: "recurring" as const, metric: "gymSessions", target: 3, unit: "", area: "physical" as const, period: "week" as const, periodKey: r.key, carried: false, done: false, xp: 20 }; const p = goalProgress(g, d, r); expect(p.value).toBe(2); expect(p.percent).toBe(67); expect(p.done).toBe(false); });
+  it("milestone carries over when not done", () => { const d = mk(); const r = weekRange(T); const prev = weekRange(addDays(r.from, -7)); const goals = [{ id: "m", title: "big", kind: "milestone" as const, target: 100, unit: "", area: "career" as const, period: "week" as const, periodKey: prev.key, carried: false, done: false, xp: 50, manualValue: 10 }]; const out = materializeGoals(goals, [], d, r, () => "new"); expect(out.some((g) => g.carried && g.periodKey === r.key)).toBe(true); });
+  it("period report averages", () => { const d = mk((x) => { x.entries[T] = { ...emptyEntry(T), score: 80, closed: true }; x.entries["2025-03-11"] = { ...emptyEntry("2025-03-11"), score: 40 }; }); const rep = periodReport(d, weekRange(T)); expect(rep.scoredDays).toBe(2); expect(rep.avgScore).toBe(60); });
+});
+describe("recovery", () => {
+  it("sobriety, gaps, phases", () => { const d = mk((x) => { x.sobrietyStartAt = "2025-01-01T00:00:00.000Z"; x.relapseLog = [{ id: "a", date: "2025-02-01", at: "2025-02-01T10:00:00.000Z", durationMin: 5, acts: [], answers: {} }, { id: "b", date: "2025-02-01", at: "2025-02-01T22:00:00.000Z", durationMin: 5, acts: [], answers: {} }]; }); const s = sobrietyStats(d, new Date("2025-03-12T12:00:00Z")); expect(s.currentDays).toBe(38); expect(s.longestDays).toBe(38); expect(relapseGaps(d.relapseLog)).toEqual([12]); expect(recoveryPhase(3).id).toBe("start"); expect(recoveryPhase(20).id).toBe("early"); expect(recoveryPhase(60).id).toBe("rebuild"); expect(recoveryPhase(120).id).toBe("maintain"); });
+  it("risk & indices are bounded 0..100", () => { const d = mk((x) => { x.sobrietyStartAt = "2025-03-10T00:00:00.000Z"; x.relapseLog = [{ id: "a", date: "2025-03-11", at: "2025-03-11T10:00:00.000Z", durationMin: 5, acts: [], answers: {} }]; x.cravingEvents = [{ id: "c", date: T, at: `${T}T10:00:00Z`, urge: 9, triggers: ["الوحدة"], note: "", outcome: "resisted", xp: 10 }]; }); const r = computeRisk(d, T); expect(r.score).toBeGreaterThanOrEqual(0); expect(r.score).toBeLessThanOrEqual(100); expect(r.factors.length).toBeGreaterThan(0); expect(r.plan.length).toBeGreaterThan(0); const i = recoveryIndex(d, T); expect(i.value).toBeGreaterThanOrEqual(0); expect(i.value).toBeLessThanOrEqual(100); expect(addictionIndex(d, T)).toBeGreaterThan(0); });
+  it("craving xp with repeated trigger penalty", () => { const base = { date: T, at: "", urge: 5, triggers: ["x"], note: "", outcome: "resisted" as const }; expect(cravingXp(base, [])).toBe(15); const hist = [1, 2].map((i) => ({ id: String(i), date: addDays(T, -i), at: "", urge: 5, triggers: ["x"], note: "", outcome: "resisted" as const, xp: 0 })); expect(cravingXp(base, hist)).toBe(12); expect(cravingXp({ ...base, outcome: "relapse" }, [])).toBe(-10); });
+});
+describe("challenges", () => {
+  it("daily challenge fails on a missed past day, boss succeeds on total", () => { const d = mk((x) => { x.entries["2025-03-10"] = { ...emptyEntry("2025-03-10"), gym: true }; }); const c = { id: "c", title: "t", type: "daily" as const, source: "gymSessions", target: 1, durationDays: 5, startDate: "2025-03-10", dailyReward: 5, successReward: 50, failurePenalty: 10, progress: {}, status: "active" as const, area: "physical" as const }; const s = challengeState(c, d, T); expect(s.successDays).toBe(1); expect(s.failed).toBe(true); expect(resolveChallengeStatus(c, d, T)).toBe("failed"); const boss = { ...c, type: "boss" as const, target: 1 }; expect(resolveChallengeStatus(boss, d, T)).toBe("success"); });
+  it("course-based source", () => { const d = mk((x) => { x.courses = [{ id: "k", title: "c", platform: "", area: "academic", addedAt: "", lessons: [{ id: "l", title: "l", durationMin: 10, videoUrl: "", done: true, doneAt: `${T}T10:00:00Z` }] }]; }); const c = { id: "c", title: "t", type: "boss" as const, source: "course:k", target: 1, durationDays: 10, startDate: T, dailyReward: 0, successReward: 10, failurePenalty: 0, progress: {}, status: "active" as const, area: "academic" as const }; expect(challengeState(c, d, T).total).toBe(1); });
+});
+describe("courses csv", () => {
+  it("duration parsing", () => { expect(parseDuration("12:34")).toBeCloseTo(12.57, 1); expect(parseDuration("1:02:03")).toBeCloseTo(62.05, 1); expect(parseDuration("45m")).toBe(45); expect(parseDuration("1h 20m")).toBe(80); expect(parseDuration("90")).toBe(90); expect(parseDuration("1.5h")).toBe(90); expect(parseDuration("٤٥ دقيقة")).toBe(45); });
+  it("delimiter + column detection", () => { const csv = "Title;Duration;URL\nIntro;10:00;https://x/1\nSetup;1h 5m;https://x/2\n"; expect(detectDelimiter(csv)).toBe(";"); const r = parseCoursesCsv(csv); expect(r.lessons.length).toBe(2); expect(r.lessons[1].durationMin).toBe(65); expect(r.columns.url).toBe(2); expect(r.hadHeader).toBe(true); });
+  it("headerless inference", () => { const r = parseCoursesCsv("Lesson one,12:00\nLesson two,8:30\n"); expect(r.lessons.length).toBe(2); expect(r.lessons[0].durationMin).toBe(12); });
+});
+describe("training", () => { it("stats", () => { const log = { areas: [{ id: "a", name: "x", color: "#000", lifeArea: "career" as const, custom: false }], sessions: [{ id: "1", date: T, areaId: "a", minutes: 60, note: "", xp: 6 }, { id: "2", date: "2025-03-11", areaId: "a", minutes: 30, note: "", xp: 3 }] }; const s = trainingStats(log, T); expect(s.lifetimeMinutes).toBe(90); expect(s.currentStreak).toBe(2); expect(s.bestDay!.minutes).toBe(60); expect(s.areaBreakdown[0].percent).toBe(100); expect(trainingSessionXp(5)).toBe(3); expect(trainingSessionXp(600)).toBe(30); }); });

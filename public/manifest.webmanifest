@@ -1,0 +1,23 @@
+{
+  "name": "Me vs Me · الفارس الفارغ",
+  "short_name": "Me vs Me",
+  "description": "نظام تشغيل شخصي — RPG + Journal + Performance OS",
+  "start_url": "/day",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "ar",
+  "background_color": "#0b0b14",
+  "theme_color": "#0b0b14",
+  "icons": [
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "192x192", "type": "image/png" }
+  ],
+  "shortcuts": [
+    { "name": "يومي", "url": "/day" },
+    { "name": "التعافي (SOS)", "url": "/healing?sos=1" },
+    { "name": "تفريغ العقل", "url": "/brain-dump" }
+  ]
+}

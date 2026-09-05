@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f4f4fa;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f1f8;
+  --border: rgba(30, 27, 75, 0.1);
+  --text: #15132b;
+  --muted: #5d5b7a;
+  --accent: #4f46e5;
+  --accent-soft: rgba(79, 70, 229, 0.12);
+  --gold: #c9a227;
+  --gold-soft: rgba(201, 162, 39, 0.16);
+  --danger: #dc2626;
+  --ok: #059669;
+  --warn: #d97706;
+  --ring: rgba(79, 70, 229, 0.45);
+  --shadow: 0 10px 30px rgba(20, 18, 60, 0.08);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #0b0b14;
+  --bg-elev: #12121f;
+  --surface: #141425;
+  --surface-2: #1b1b30;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #eeeef7;
+  --muted: #9a9ab8;
+  --accent: #7c74ff;
+  --accent-soft: rgba(124, 116, 255, 0.16);
+  --gold: #e6c04a;
+  --gold-soft: rgba(230, 192, 74, 0.14);
+  --danger: #f87171;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --ring: rgba(124, 116, 255, 0.55);
+  --shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+@theme inline {
+  --color-bg: var(--bg);
+  --color-elev: var(--bg-elev);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-sans: "Segoe UI", "Noto Naskh Arabic", "Noto Sans Arabic", Tahoma, system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body {
+  background: radial-gradient(1200px 600px at 100% -10%, var(--accent-soft), transparent 60%), radial-gradient(900px 500px at -10% 110%, var(--gold-soft), transparent 55%), var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+* { border-color: var(--border); }
+button, [role="button"] { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
+.card { background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, white 8%), var(--surface)); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); }
+[data-theme="dark"] .card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)) , var(--surface); }
+.glass { backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg-elev) 80%, transparent); }
+.touch { min-height: 44px; min-width: 44px; }
+.scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; } .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+.no-scrollbar::-webkit-scrollbar { display: none; } .no-scrollbar { scrollbar-width: none; }
+input[type="range"] { accent-color: var(--accent); }
+input, textarea, select { background: var(--surface-2); color: var(--text); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes pulse-gold { 0%, 100% { box-shadow: 0 0 0 0 var(--gold-soft); } 50% { box-shadow: 0 0 0 12px transparent; } }
+@keyframes breathe { 0% { transform: scale(0.7); } 40% { transform: scale(1); } 60% { transform: scale(1); } 100% { transform: scale(0.7); } }
+.anim-fade-up { animation: fade-up 0.28s ease-out both; }
+.anim-sheet { animation: sheet-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anim-gold { animation: pulse-gold 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+.pdf-page { position: relative; margin: 0 auto 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+.pdf-page canvas { display: block; }
+.pdf-page .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; opacity: 0.25; }
+.pdf-page .textLayer span { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.pdf-page .textLayer ::selection { background: rgba(124,116,255,0.5); }
+.reader-sepia canvas { filter: sepia(0.6) contrast(0.95) brightness(0.98); }
+.reader-dark canvas { filter: invert(0.92) hue-rotate(180deg) contrast(0.9); }
+.reader-paper canvas { filter: contrast(0.9) brightness(0.96) saturate(0.85); }
