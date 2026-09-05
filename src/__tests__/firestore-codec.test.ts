@@ -112,3 +112,15 @@ describe("account identifiers", () => {
     expect(normalizeAccountCode(" a1b2c3-d4e5 ")).toBe("A1B2C3-D4E5");
   });
 });
+
+describe("firestore deadlines", () => {
+  it("رمي FirestoreTimeoutError عند تجاوز المهلة", async () => {
+    const { withDeadline, isFirestoreTimeoutError } = await import("@/server/firestore/deadline");
+    const never = new Promise(() => {});
+    await expect(withDeadline(never, "pull", 20)).rejects.toSatisfy(isFirestoreTimeoutError);
+  });
+  it("يمرر النتيجة عندما تسبق العملية المهلة", async () => {
+    const { withDeadline } = await import("@/server/firestore/deadline");
+    await expect(withDeadline(Promise.resolve("ok"), "pull", 500)).resolves.toBe("ok");
+  });
+});

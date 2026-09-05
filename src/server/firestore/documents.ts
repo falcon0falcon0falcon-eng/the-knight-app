@@ -1,5 +1,6 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { getDb } from "@/server/firebase";
+import { withDeadline } from "./deadline";
 import {
   COLLECTIONS,
   MAX_PULL_DOCS,
@@ -41,7 +42,10 @@ function documentsRef(db: Firestore, accountId: string) {
 export async function pullDocuments(accountId: string, since: number, limit = MAX_PULL_DOCS): Promise<PullResult> {
   const db = getDb();
   const safeSince = Number.isFinite(since) && since > 0 ? Math.floor(since) : 0;
-  const snap = await documentsRef(db, accountId).where("serverAt", ">", safeSince).orderBy("serverAt", "asc").limit(limit).get();
+  const snap = await withDeadline(
+    documentsRef(db, accountId).where("serverAt", ">", safeSince).orderBy("serverAt", "asc").limit(limit).get(),
+    "pull",
+  );
 
   const docs: CloudDoc[] = [];
   let lastServerAt = safeSince;
@@ -67,7 +71,7 @@ export async function pushDocuments(accountId: string, incoming: unknown): Promi
 
   const col = documentsRef(db, accountId);
   const refs = valid.map((d) => col.doc(d.docId));
-  const existing = await db.getAll(...refs, { fieldMask: ["updatedAt", "serverAt"] });
+  const existing = await withDeadline(db.getAll(...refs, { fieldMask: ["updatedAt", "serverAt"] }), "push:getAll");
 
   const batch = db.batch();
   const accepted: string[] = [];
@@ -97,7 +101,7 @@ export async function pushDocuments(accountId: string, incoming: unknown): Promi
     writes += 1;
   });
 
-  if (writes) await batch.commit();
+  if (writes) await withDeadline(batch.commit(), "push:commit");
   return { accepted, rejected, serverTime: now };
 }
 
@@ -107,11 +111,11 @@ export async function deleteAccountDocuments(accountId: string): Promise<number>
   const col = documentsRef(db, accountId);
   let deleted = 0;
   for (;;) {
-    const snap = await col.limit(400).get();
+    const snap = await withDeadline(col.limit(400).get(), "delete:scan");
     if (snap.empty) break;
     const batch = db.batch();
     snap.docs.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
+    await withDeadline(batch.commit(), "delete:commit");
     deleted += snap.size;
     if (snap.size < 400) break;
   }
