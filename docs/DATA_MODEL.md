@@ -87,4 +87,4 @@
 | طبقة | تقنية | المحتوى |
 |---|---|---|
 | Local | IndexedDB (Dexie) `mevsme` | `docs(key → value, updatedAt)`, `pdfFiles`, `outbox` |
-| Cloud | PostgreSQL `documents(account_id, key, data jsonb, updated_at)` | كل المفاتيح ما عدا PDF bytes والصور الكبيرة (اختياري) |
+| Cloud | Firebase Firestore `accounts/{accountId}/documents/{key}` → `{ key, json, encoding, updatedAt, serverAt }` | كل المفاتيح ما عدا PDF bytes والصور الكبيرة (اختياري) |

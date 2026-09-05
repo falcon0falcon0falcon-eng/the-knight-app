@@ -64,7 +64,7 @@
 | **AI-03** | Memory teaching | "احفظ في ذاكرتك..." | `aiMemory*` | `parseTeachingPhrase` | — | — | — | `domain/ai/memory.ts` | 🧪 |
 | **SET-01** | Settings Center | كل الأقسام المذكورة | كثيرة | — | Settings page (sections) | — | — | `features/settings` | 📱♿ |
 | **BAK-01** | Backup & Restore | full export/restore/reset, schemaVersion, validation, migration, safe restore | الكل | — | Settings › Data | MIG | — | `core/backup.ts` | استعادة نسخة قديمة تنجح 🧪 |
-| **SYNC-01** | Cloud sync | local-first، pending queue، reconnect sync، account-scoped، no destructive overwrite | الكل | — | Settings › Cloud | Postgres | — | `core/sync.ts` + `/api/sync` | ✅ |
+| **SYNC-01** | Cloud sync | local-first، pending queue، reconnect sync، account-scoped، no destructive overwrite | الكل | — | Settings › Cloud | Firestore | — | `core/storage.ts` + `/api/sync` + `server/firestore/*` | ✅ |
 | **PWA-01** | PWA | manifest, icons, install prompt, offline shell, offline data | — | — | Settings › PWA | sw.js | — | `public/sw.js` | ✅ |
 | **STARTUP-01** | Startup plan | خطة انطلاق | `startupPlan` | — | Menu | — | نسخ | `domain/identity` | ✅ |
 | **POMO-01** | Pomodoro settings | إعدادات | `pomodoroSettings` | — | Settings › Daily | — | نسخ | — | ✅ |

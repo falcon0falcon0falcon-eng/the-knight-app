@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// كل الوصول إلى Firestore يمر عبر Next.js route handlers باستخدام Firebase Admin SDK
+// (الذي يتجاوز هذه القواعد). لذلك نمنع أي وصول مباشر من العميل منعًا باتًا.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

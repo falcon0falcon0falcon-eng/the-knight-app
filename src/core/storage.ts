@@ -72,32 +72,50 @@ export const pdfStore = {
   async has(bookId: string) { return !!(await idb().pdfFiles.get(bookId)); },
 };
 
-// ─── Cloud repository (PostgreSQL via /api/sync) ────────────────────────────
+// ─── Cloud repository (Firebase Firestore via /api/sync) ────────────────────
+// الخادم (Next.js route handlers) يكتب في Firestore عبر firebase-admin؛ العميل لا يعرف
+// أي تفاصيل عن المزوّد ولا يحمل أي اعتمادات — نفس عقد الـAPI السابق مع دعم hasMore.
 export interface CloudDoc { key: string; data: unknown; updatedAt: number }
+export type CloudRejectReason = "invalid" | "too_large" | "stale";
+export interface CloudReject { key: string; reason?: CloudRejectReason; serverUpdatedAt: number }
 // المفاتيح الثقيلة/الحساسة لا تُرفع سحابيًا افتراضيًا (base64 صور) — تُصدَّر في الـbackup فقط
 export const CLOUD_EXCLUDED_KEYS: AppDataKey[] = ["photos", "bookCovers", "profileCardPhoto"];
+
+/** الخادم غير مُهيّأ لـFirestore (503) — التطبيق يستمر محليًا بلا اعتباره خطأ */
+export class CloudDisabledError extends Error {
+  constructor() { super("cloud disabled"); this.name = "CloudDisabledError"; }
+}
+
+async function cloudFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status === 503) {
+    const body = (await res.clone().json().catch(() => null)) as { error?: string } | null;
+    if (body?.error === "cloud_disabled") throw new CloudDisabledError();
+  }
+  return res;
+}
 
 export class CloudRepository {
   constructor(private accountId: string, private accountCode: string) {}
   private headers() { return { "content-type": "application/json", "x-account-id": this.accountId, "x-account-code": this.accountCode }; }
-  async push(docs: CloudDoc[]): Promise<{ accepted: string[]; rejected: { key: string; serverUpdatedAt: number }[] }> {
-    const res = await fetch("/api/sync", { method: "POST", headers: this.headers(), body: JSON.stringify({ docs }) });
+  async push(docs: CloudDoc[]): Promise<{ accepted: string[]; rejected: CloudReject[] }> {
+    const res = await cloudFetch("/api/sync", { method: "POST", headers: this.headers(), body: JSON.stringify({ docs }) });
     if (!res.ok) throw new Error(`sync push failed: ${res.status}`);
     return res.json();
   }
-  async pull(since: number): Promise<{ docs: CloudDoc[]; serverTime: number }> {
-    const res = await fetch(`/api/sync?since=${since}`, { headers: this.headers() });
+  async pull(since: number): Promise<{ docs: CloudDoc[]; serverTime: number; hasMore?: boolean }> {
+    const res = await cloudFetch(`/api/sync?since=${since}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`sync pull failed: ${res.status}`);
     return res.json();
   }
   async link(code: string): Promise<{ accountId: string; accountCode: string } | null> {
-    const res = await fetch("/api/sync/link", { method: "POST", headers: this.headers(), body: JSON.stringify({ code }) });
-    if (!res.ok) return null; return res.json();
+    const res = await cloudFetch("/api/sync/link", { method: "POST", headers: this.headers(), body: JSON.stringify({ code }) }).catch(() => null);
+    if (!res || !res.ok) return null; return res.json();
   }
 }
 
 // ─── Sync Engine ─────────────────────────────────────────────────────────────
-export type SyncStatus = { state: "idle" | "syncing" | "offline" | "error"; pending: number; lastSyncAt?: number; error?: string };
+export type SyncStatus = { state: "idle" | "syncing" | "offline" | "error" | "disabled"; pending: number; lastSyncAt?: number; error?: string };
 export class SyncEngine {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
@@ -122,14 +140,17 @@ export class SyncEngine {
       if (docs.length) { const r = await this.cloud.push(docs); await this.local.clearPending([...r.accepted, ...r.rejected.map((x) => x.key)]); }
       else if (pending.length) await this.local.clearPending(pending);
       const since = (await this.local.getMeta<number>("lastSyncAt")) ?? 0;
-      const { docs: remote, serverTime } = await this.cloud.pull(since);
+      const { docs: remote, serverTime, hasMore } = await this.cloud.pull(since);
       const stillPending = new Set(await this.local.pendingKeys());
       const patch: Partial<AppData> = {}; const patchAt: Record<string, number> = {};
       for (const d of remote) { if (stillPending.has(d.key)) continue; /* المحلي authoritative عند وجود pending */ const localAt = updatedAt[d.key] ?? 0; if (d.updatedAt > localAt) { (patch as Record<string, unknown>)[d.key] = d.data; patchAt[d.key] = d.updatedAt; } }
       if (Object.keys(patch).length) { this.applyRemote(patch, patchAt); await this.local.saveKeys(patch, patchAt); }
       await this.local.setMeta("lastSyncAt", serverTime);
       this.set({ state: "idle", pending: (await this.local.pendingKeys()).length, lastSyncAt: serverTime, error: undefined });
+      // Firestore يعيد الصفحات على دفعات — أكمل فورًا إن بقي المزيد
+      if (hasMore) this.schedule(300);
     } catch (e) {
+      if (e instanceof CloudDisabledError) { this.set({ state: "disabled", pending: (await this.local.pendingKeys()).length, error: undefined }); return; }
       this.set({ state: "error", error: e instanceof Error ? e.message : String(e), pending: (await this.local.pendingKeys()).length });
     } finally { this.running = false; }
   }

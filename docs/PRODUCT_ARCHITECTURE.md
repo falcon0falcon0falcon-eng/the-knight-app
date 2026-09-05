@@ -1,11 +1,11 @@
 # PRODUCT ARCHITECTURE — Me vs Me · الفارس الفارغ
 
 ## قرار المنصة (Documented deviation)
-المواصفة فضّلت Vite + Firebase. بيئة التشغيل المتاحة هي **Next.js (App Router) + PostgreSQL (Drizzle)**. لذلك:
+المواصفة فضّلت Vite + Firebase. بيئة التشغيل هي **Next.js (App Router) + Firebase Firestore (Admin SDK)** — لا PostgreSQL ولا `DATABASE_URL`. لذلك:
 - الواجهة: React 19 + TypeScript + Tailwind v4 (design tokens في `globals.css`).
 - الـrouting: Next App Router عبر `app/[[...slug]]` + خريطة routes داخلية تحفظ الـlegacy routes والـredirects (`src/app/routes.ts`).
 - Local-first: **IndexedDB (Dexie)** هي مصدر الحقيقة على الجهاز.
-- Cloud: **PostgreSQL** عبر `/api/sync` بدل Firestore، بنفس فلسفة الـlegacy (local write first → outbox → push/pull → merge غير مدمّر).
+- Cloud: **Firebase Firestore** عبر `/api/sync` (route handlers تستخدم firebase-admin على الخادم فقط)، بنفس فلسفة الـlegacy (local write first → outbox → push/pull → merge غير مدمّر). التفاصيل: `docs/CLOUD_SYNC_FIREBASE.md`.
 - Drive: Google Identity Services + Drive REST (`drive.file`) — client-side فقط، بدون تمرير الملفات عبر الخادم.
 - AI: `/api/ai` (server) يقرأ `OPENAI_API_KEY` إن وُجد؛ وإلا يعمل "المدرّب المحلي" (rule-based على السياق الحقيقي) — بلا fake responses مُدّعاة.
 
