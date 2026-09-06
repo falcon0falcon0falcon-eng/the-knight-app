@@ -6,6 +6,7 @@ import { ROUTES, resolveRoute } from "./routes";
 import { useApp, useLevel } from "@/stores/app-store";
 import { Button, Modal, RankBadge, ToastHost, cx, Input, Field, LoadingState } from "@/components/ui";
 import { rankForLevel, totalXp } from "@/calculations/gamification";
+import { installChunkErrorGuard, registerServiceWorker } from "@/core/pwa";
 import { levelFromXp } from "@/calculations/gamification";
 
 function useTheme() {
@@ -18,9 +19,10 @@ function useTheme() {
 function usePwa() {
   const [prompt, setPrompt] = useState<(Event & { prompt: () => Promise<void> }) | null>(null);
   useEffect(() => {
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
+    registerServiceWorker();
+    const off = installChunkErrorGuard();
     const h = (e: Event) => { e.preventDefault(); setPrompt(e as Event & { prompt: () => Promise<void> }); (window as unknown as { __pwaPrompt?: Event }).__pwaPrompt = e; };
-    window.addEventListener("beforeinstallprompt", h); return () => window.removeEventListener("beforeinstallprompt", h);
+    window.addEventListener("beforeinstallprompt", h); return () => { window.removeEventListener("beforeinstallprompt", h); off(); };
   }, []);
   return prompt;
 }

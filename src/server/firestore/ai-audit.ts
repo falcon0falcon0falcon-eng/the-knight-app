@@ -1,5 +1,6 @@
 import { getDb } from "@/server/firebase";
 import { COLLECTIONS, encodePayload } from "./codec";
+import { withDeadline } from "./deadline";
 
 export interface AiAuditEntry {
   id: string;
@@ -19,7 +20,7 @@ export async function recordAiAudit(entry: AiAuditEntry): Promise<boolean> {
   const ref = db.collection(COLLECTIONS.aiAuditLog).doc(entry.id);
   const { json, bytes } = encodePayload(entry.payload ?? {});
   try {
-    await ref.create({
+    await withDeadline(ref.create({
       accountId: entry.accountId,
       mode: entry.mode,
       actionType: entry.actionType,
@@ -27,7 +28,7 @@ export async function recordAiAudit(entry: AiAuditEntry): Promise<boolean> {
       payloadBytes: bytes,
       result: entry.result,
       createdAt: Date.now(),
-    });
+    }), "audit:create");
     return true;
   } catch (e) {
     // ALREADY_EXISTS (code 6) => onConflictDoNothing

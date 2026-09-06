@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isCloudConfigured, isCloudDisabledError } from "@/server/firebase";
 import { ensureAccount, type AccountRecord } from "@/server/firestore/accounts";
+import { isFirestoreTimeoutError } from "@/server/firestore/deadline";
 
 /** 503 موحّد عندما لا تكون اعتمادات Firebase مضبوطة — العميل يعمل local-first بلا أخطاء مزعجة */
 export function cloudDisabledResponse() {
@@ -16,6 +17,10 @@ export function unauthorizedResponse() {
 
 export function cloudErrorResponse(e: unknown) {
   if (isCloudDisabledError(e)) return cloudDisabledResponse();
+  if (isFirestoreTimeoutError(e)) {
+    // 504: عطل مؤقت — العميل يحتفظ بالتغييرات في الطابور ويعيد المحاولة
+    return NextResponse.json({ error: "firestore_timeout", message: "Firestore لم يستجب في الوقت المحدد" }, { status: 504 });
+  }
   const message = e instanceof Error ? e.message : "firestore error";
   return NextResponse.json({ error: "firestore_error", message }, { status: 502 });
 }

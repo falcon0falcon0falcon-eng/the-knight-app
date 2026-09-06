@@ -72,7 +72,12 @@ aiAuditLog/{id}      → { accountId, mode, actionType, payloadJson, result, cre
 | `GET /api/health` | `{ ok, cloud: { provider:"firestore", configured, reachable } }` |
 
 الرموز: `401` هوية ناقصة/رمز غير مطابق · `400` طلب غير صالح · `404` رمز ربط غير موجود ·
-`503 cloud_disabled` السحابة غير مُهيّأة · `502 firestore_error` عطل في Firestore.
+`503 cloud_disabled` السحابة غير مُهيّأة · `504 firestore_timeout` تجاوز المهلة · `502 firestore_error` عطل في Firestore.
+
+**مهلة زمنية على كل عملية Firestore** (`FIRESTORE_TIMEOUT_MS`، افتراضي 15000): بدونها يعيد gRPC
+المحاولة لدقائق عند انقطاع الشبكة فتُعلَّق طلبات المزامنة وتُستهلك اتصالات الخادم. مع المهلة يعود `504`
+سريعًا، ويحتفظ العميل بالتغييرات في الطابور ويعيد المحاولة. و`/api/health` له مهلته الخاصة
+(`HEALTH_TIMEOUT_MS`، افتراضي 5000) فلا يعلّق أبدًا.
 
 ## 4) دلالات المزامنة (كما كانت، بلا تراجع)
 
@@ -91,6 +96,7 @@ aiAuditLog/{id}      → { accountId, mode, actionType, payloadJson, result, cre
 src/server/firebase.ts             تهيئة firebase-admin + كشف الاعتمادات + CloudDisabledError
 src/server/auth.ts                 مصادقة ترويسات الحساب + استجابات 503/401/502 الموحّدة
 src/server/firestore/codec.ts      ترميز/تحقق نقي (بلا firebase) — مُختبَر وحدويًا
+src/server/firestore/deadline.ts   مهلة زمنية لكل عملية Firestore (FirestoreTimeoutError)
 src/server/firestore/accounts.ts   إنشاء/جلب الحساب + فهرس الرموز + الربط
 src/server/firestore/documents.ts  push/pull/delete لمستندات المزامنة
 src/server/firestore/ai-audit.ts   سجل تدقيق AI
@@ -103,6 +109,7 @@ src/core/storage.ts                العميل: CloudRepository + SyncEngine (+
 npm test
 ```
 
-- `firestore-codec.test.ts` — الترميز، الحدود، LWW، صلاحية المعرّفات.
+- `api-routes.test.ts` — نقاط `/api/sync`, `/api/sync/link`, `/api/ai/audit`, `/api/health` نفسها (رموز الحالة، الهوية، العزل بين الحسابات).
+- `firestore-codec.test.ts` — الترميز، الحدود، LWW، صلاحية المعرّفات، المهل الزمنية.
 - `firestore-sync.test.ts` — push/pull/link/audit فوق **Firestore مزيّف في الذاكرة** (لا يحتاج Java/محاكي).
 - `firebase-config.test.ts` — كشف الاعتمادات لكل الخيارات الأربعة.

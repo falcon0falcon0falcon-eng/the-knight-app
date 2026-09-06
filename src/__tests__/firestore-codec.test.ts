@@ -112,3 +112,30 @@ describe("account identifiers", () => {
     expect(normalizeAccountCode(" a1b2c3-d4e5 ")).toBe("A1B2C3-D4E5");
   });
 });
+
+describe("firestore deadlines", () => {
+  it("رمي FirestoreTimeoutError عند تجاوز المهلة", async () => {
+    const { withDeadline, isFirestoreTimeoutError } = await import("@/server/firestore/deadline");
+    const never = new Promise(() => {});
+    await expect(withDeadline(never, "pull", 20)).rejects.toSatisfy(isFirestoreTimeoutError);
+  });
+  it("يمرر النتيجة عندما تسبق العملية المهلة", async () => {
+    const { withDeadline } = await import("@/server/firestore/deadline");
+    await expect(withDeadline(Promise.resolve("ok"), "pull", 500)).resolves.toBe("ok");
+  });
+});
+
+describe("PWA self-heal", () => {
+  it("يتعرّف على أخطاء فشل تحميل الـchunks", async () => {
+    const { isChunkLoadError } = await import("@/core/pwa");
+    const chunkErrors = [
+      Object.assign(new Error("Loading chunk 42 failed"), { name: "ChunkLoadError" }),
+      new Error("Failed to fetch dynamically imported module: /_next/static/chunks/x.js"),
+      new Error("error loading dynamically imported module"),
+      new Error("Importing a module script failed."),
+    ];
+    for (const e of chunkErrors) expect(isChunkLoadError(e)).toBe(true);
+    expect(isChunkLoadError(new Error("Cannot read properties of undefined"))).toBe(false);
+    expect(isChunkLoadError(null)).toBe(false);
+  });
+});
