@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>إصلاح التطبيق — الفارس الفارغ</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0d12; color: #e8ecf4; font-family: system-ui, "Segoe UI", sans-serif; padding: 24px; }
+      .card { max-width: 460px; background: #141822; border: 1px solid #232936; border-radius: 20px; padding: 24px; text-align: center; }
+      h1 { font-size: 18px; margin: 8px 0; }
+      p { font-size: 13px; opacity: .75; line-height: 1.8; }
+      button { padding: 12px 18px; border: 0; border-radius: 12px; background: #6c8cff; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+      a { color: #6c8cff; font-size: 13px; }
+      #log { margin-top: 14px; font-size: 11px; opacity: .7; text-align: start; direction: ltr; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div style="font-size: 40px">🧹</div>
+      <h1>إصلاح التطبيق</h1>
+      <p>
+        هذه الصفحة تُلغي تسجيل الـService Worker وتمسح كاش الملفات القديمة التي قد تمنع فتح صفحات التطبيق.
+        <b>بياناتك المحفوظة على الجهاز (IndexedDB) والمزامنة السحابية لا تتأثر إطلاقًا.</b>
+      </p>
+      <button id="fix" type="button">امسح الكاش وأعد التحميل</button>
+      <div id="log"></div>
+      <p style="margin-top: 14px"><a href="/day">العودة إلى التطبيق</a></p>
+    </div>
+    <script>
+      const log = (m) => (document.getElementById("log").textContent += m + "\n");
+      document.getElementById("fix").addEventListener("click", async () => {
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const r of regs) { await r.unregister(); log("unregistered: " + (r.scope || "sw")); }
+            if (!regs.length) log("no service worker registered");
+          }
+          if (window.caches) {
+            const keys = await caches.keys();
+            for (const k of keys) { await caches.delete(k); log("cache deleted: " + k); }
+            if (!keys.length) log("no caches found");
+          }
+          log("done — reloading…");
+          setTimeout(() => (location.href = "/day"), 900);
+        } catch (e) {
+          log("error: " + (e && e.message ? e.message : e));
+        }
+      });
+    </script>
+  </body>
+</html>

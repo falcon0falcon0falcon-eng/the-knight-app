@@ -124,3 +124,18 @@ describe("firestore deadlines", () => {
     await expect(withDeadline(Promise.resolve("ok"), "pull", 500)).resolves.toBe("ok");
   });
 });
+
+describe("PWA self-heal", () => {
+  it("يتعرّف على أخطاء فشل تحميل الـchunks", async () => {
+    const { isChunkLoadError } = await import("@/core/pwa");
+    const chunkErrors = [
+      Object.assign(new Error("Loading chunk 42 failed"), { name: "ChunkLoadError" }),
+      new Error("Failed to fetch dynamically imported module: /_next/static/chunks/x.js"),
+      new Error("error loading dynamically imported module"),
+      new Error("Importing a module script failed."),
+    ];
+    for (const e of chunkErrors) expect(isChunkLoadError(e)).toBe(true);
+    expect(isChunkLoadError(new Error("Cannot read properties of undefined"))).toBe(false);
+    expect(isChunkLoadError(null)).toBe(false);
+  });
+});

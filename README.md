@@ -89,6 +89,22 @@ npx firebase-tools deploy --only firestore:rules
 | `FIREBASE_DATABASE_ID` | `(default)` | قاعدة Firestore غير الافتراضية |
 | `OPENAI_API_KEY` | — | تفعيل مساعد الـAI (بدونه يعمل المدرّب المحلي) |
 
+## 4.5) لو ظهرت شاشة «تعذّر فتح الصفحة» بعد نشر جديد
+
+سببها الشائع نسخة قديمة مخزّنة في الـService Worker. الحلول (بالترتيب):
+
+1. من داخل التطبيق: اضغط **«إصلاح وإعادة تحميل»** في شاشة الخطأ.
+2. أو افتح **`/fix.html`** — صفحة إنقاذ مستقلة تلغي الـService Worker وتمسح الكاش (بياناتك المحلية والسحابية لا تتأثر).
+3. أو من الكونسول:
+   ```js
+   navigator.serviceWorker.getRegistrations().then(r => r.forEach(x => x.unregister()));
+   caches.keys().then(k => k.forEach(c => caches.delete(c)));
+   location.reload();
+   ```
+
+من هذا الإصدار صار كاش الـSW مرتبطًا بنسخة النشر (`NEXT_PUBLIC_BUILD_VERSION` / `VERCEL_GIT_COMMIT_SHA`)،
+والصفحات تُجلب **من الشبكة أولًا**، وأي فشل في تحميل chunk يُصلَح تلقائيًا مرة واحدة.
+
 ## 5) النشر
 
 على Vercel (أو أي استضافة Node): أضف نفس متغيرات البيئة في إعدادات المشروع
